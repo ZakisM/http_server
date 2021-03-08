@@ -18,15 +18,15 @@ use crate::handler::Handler;
 use crate::route::Route;
 
 pub struct Server {
-    pub listen_port: u16,
+    pub address: String,
     pub timeout: u64,
     pub routes: HashMap<String, Vec<Handler>>,
 }
 
 impl Server {
-    pub fn new(listen_port: u16, timeout: u64) -> Self {
+    pub fn new<T: AsRef<str>>(address: T, timeout: u64) -> Self {
         Server {
-            listen_port,
+            address: address.as_ref().to_owned(),
             timeout,
             routes: HashMap::new(),
         }
@@ -45,7 +45,7 @@ impl Server {
     }
 
     pub fn start(self) -> Result<JoinHandle<()>> {
-        let local_address = SocketAddrV4::from_str(&format!("127.0.0.1:{}", self.listen_port))?;
+        let local_address = SocketAddrV4::from_str(&self.address)?;
         let timeout = self.timeout;
         let routes = Arc::new(self.routes);
 
