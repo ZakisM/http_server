@@ -7,6 +7,7 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use http_lib::error::TcpIpError;
+use http_lib::error::TcpIpError::TcpTimeout;
 use http_lib::http_item::HttpItem;
 use http_lib::request::Request;
 use http_lib::response::response_status::ResponseStatus;
@@ -71,30 +72,43 @@ impl Server {
                             let mut local_reader = BufReader::new(&stream);
                             let mut local_writer = BufWriter::new(&stream);
 
-                            match Request::from_reader(&mut local_reader) {
-                                Ok(request) => {
-                                    if let Some(handlers) = routes.get(&request.header.uri) {
-                                        let correct_handler = handlers
-                                            .iter()
-                                            .find(|h| *h.method() == request.header.method);
+                            loop {
+                                match Request::from_reader(&mut local_reader) {
+                                    Ok(request) => {
+                                        if let Some(handlers) = routes.get(&request.header.uri) {
+                                            let correct_handler = handlers
+                                                .iter()
+                                                .find(|h| *h.method() == request.header.method);
 
-                                        if let Some(handler) = correct_handler {
-                                            let response = handler.run(&request);
+                                            if let Some(handler) = correct_handler {
+                                                let response = handler.run(&request);
 
-                                            if let Err(e) =
-                                                Self::send_response(&mut local_writer, response)
-                                            {
-                                                eprintln!("{}", e);
+                                                if let Err(e) =
+                                                    Self::send_response(&mut local_writer, response)
+                                                {
+                                                    eprintln!("{}", e);
+                                                }
+                                            } else {
+                                                let response = ResponseBuilder::new()
+                                                    .status_code(
+                                                        ResponseStatus::MethodNotAllowed as u16,
+                                                    )
+                                                    .build()
+                                                    .expect(
+                                                        "Failed to create Method Not Allowed response.",
+                                                    );
+
+                                                if let Err(e) =
+                                                    Self::send_response(&mut local_writer, response)
+                                                {
+                                                    eprintln!("{}", e);
+                                                }
                                             }
                                         } else {
                                             let response = ResponseBuilder::new()
-                                                .status_code(
-                                                    ResponseStatus::MethodNotAllowed as u16,
-                                                )
+                                                .status_code(ResponseStatus::NotFound as u16)
                                                 .build()
-                                                .expect(
-                                                    "Failed to create Method Not Allowed response.",
-                                                );
+                                                .expect("Failed to create Not Found response.");
 
                                             if let Err(e) =
                                                 Self::send_response(&mut local_writer, response)
@@ -102,22 +116,17 @@ impl Server {
                                                 eprintln!("{}", e);
                                             }
                                         }
-                                    } else {
-                                        let response = ResponseBuilder::new()
-                                            .status_code(ResponseStatus::NotFound as u16)
-                                            .build()
-                                            .expect("Failed to create Not Found response.");
-
-                                        if let Err(e) =
-                                            Self::send_response(&mut local_writer, response)
+                                    }
+                                    Err(e) => {
+                                        if e != TcpIpError::TcpTimeout
+                                            && e != TcpIpError::DataTimeout
                                         {
                                             eprintln!("{}", e);
                                         }
-                                    }
-                                }
-                                Err(e) => {
-                                    if e != TcpIpError::TcpTimeout {
-                                        eprintln!("{}", e);
+
+                                        if e == TcpTimeout {
+                                            break;
+                                        }
                                     }
                                 }
                             }
