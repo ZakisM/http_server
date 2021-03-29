@@ -39,7 +39,7 @@ impl ThreadPool {
             thread::sleep(Duration::from_millis(10));
         });
 
-        for i in 0..size {
+        for _ in 0..size {
             let condvar = Arc::clone(&condvar);
 
             workers.push(thread::spawn(move || {
@@ -58,7 +58,6 @@ impl ThreadPool {
                     };
 
                     if let Some(task) = task {
-                        println!("[Worker - {}] Running a task...", i + 1);
                         (*task)()
                     }
                 }
