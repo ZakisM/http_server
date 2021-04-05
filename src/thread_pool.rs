@@ -28,7 +28,7 @@ impl ThreadPool {
         let number_of_tasks_clone = Arc::clone(&number_of_tasks);
 
         thread::spawn(move || loop {
-            let number_of_tasks = number_of_tasks_clone.load(Ordering::Relaxed);
+            let number_of_tasks = number_of_tasks_clone.load(Ordering::Acquire);
             if number_of_tasks > 0 {
                 if number_of_tasks >= size {
                     drain_condvar.1.notify_all();
@@ -78,6 +78,6 @@ impl ThreadPool {
     {
         let mut tasks = self.condvar.0.lock().unwrap();
         tasks.push_back(Box::new(f));
-        self.number_of_tasks.fetch_add(1, Ordering::Relaxed);
+        self.number_of_tasks.fetch_add(1, Ordering::Release);
     }
 }
